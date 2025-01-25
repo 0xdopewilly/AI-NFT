@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract AARTArtists is ERC721URIStorage, Ownable {
     //--------------------------------------------------------------------
     // VARIABLES
 
-    using Counters for Counters.Counter;
-    Counters.Counter private _tokenIds;
-
+    uint256 private _tokenIds;
     mapping(uint256 => string) private _tokenURIs;
 
     struct Profile {
@@ -31,113 +27,56 @@ contract AARTArtists is ERC721URIStorage, Ownable {
     // ERRORS
 
     error AART__AlreadyRegistered();
-    error AART__OnlyEOA();
-    error AART__OnlyTokenOwner(uint tokenId);
-    error AART__NotTransferable();
+    error AART__OnlyTokenOwner(uint256 tokenId);
+
+    //--------------------------------------------------------------------
+    // CONSTRUCTOR
 
     constructor() ERC721("AART Artists Profiles", "AAP") {}
 
-    // ************************ //
-    //      Main Functions      //
-    // ************************ //
+    //--------------------------------------------------------------------
+    // FUNCTIONS
 
     function create(string memory uri) external returns (uint256) {
-        // Each address can only have one profile nft associated with it
-        if (hasProfile(msg.sender)) revert AART__AlreadyRegistered();
+        if (balanceOf(msg.sender) > 0) revert AART__AlreadyRegistered();
 
-        uint256 tokenId = _tokenIds.current();
-        _tokenIds.increment();
-
+        uint256 tokenId = _tokenIds++;
         _safeMint(msg.sender, tokenId);
-        _setTokenURI(tokenId, uri);
+        _tokenURIs[tokenId] = uri;
 
         emit AART__ProfileCreated(tokenId, msg.sender, uri);
-
         return tokenId;
     }
 
     function update(uint256 tokenId, string memory newUri) external {
         if (msg.sender != ownerOf(tokenId))
             revert AART__OnlyTokenOwner(tokenId);
-        _setTokenURI(tokenId, newUri);
 
+        _tokenURIs[tokenId] = newUri;
         emit AART__ProfileUpdated(tokenId, newUri);
     }
 
     function burn(uint256 tokenId) external {
         if (msg.sender != ownerOf(tokenId))
             revert AART__OnlyTokenOwner(tokenId);
+
         _burn(tokenId);
+        delete _tokenURIs[tokenId];
 
         emit AART__ProfileDeleted(tokenId);
     }
 
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view virtual override(ERC721URIStorage) returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
-
-    function _burn(uint256 tokenId) internal virtual override {
-        super._burn(tokenId);
-    }
-
-    // Disable all ERC721 transfers : the artists NFT profile are not transferable
-    function _transfer(address, address, uint256) internal virtual override {
-        revert AART__NotTransferable();
-    }
-
-    function _setTokenURI(
-        uint256 tokenId,
-        string memory _tokenURI
-    ) internal override {
-        _tokenURIs[tokenId] = _tokenURI;
-    }
-
-    // ***************** //
-    //      Getters      //
-    // ***************** //
-
-    function tokenURI(
-        uint256 tokenId
-    ) public view virtual override returns (string memory) {
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        virtual
+        override
+        returns (string memory)
+    {
         return _tokenURIs[tokenId];
     }
 
     function hasProfile(address user) public view returns (bool) {
-        return balanceOf(user) != 0;
-    }
-
-    function getUserProfile(
-        address user
-    ) external view returns (Profile memory profile) {
-        if (hasProfile(user)) {
-            uint256 lastestId = _tokenIds.current();
-            for (uint256 i; i < lastestId; ) {
-                if (ownerOf(i) == user) {
-                    string memory uri = _tokenURIs[i];
-                    profile = Profile(i, uri);
-                    break;
-                }
-
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-    }
-
-    function getAllProfiles() external view returns (Profile[] memory) {
-        uint256 lastestId = _tokenIds.current();
-        Profile[] memory items = new Profile[](lastestId);
-        for (uint256 i; i < lastestId; ) {
-            string memory uri = _tokenURIs[i];
-            items[i] = Profile(i, uri);
-
-            unchecked {
-                ++i;
-            }
-        }
-        return items;
+        return balanceOf(user) > 0;
     }
 }
